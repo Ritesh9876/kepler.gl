@@ -120,6 +120,7 @@ function LoadTilesetTabFactory() {
 
     const createTileDataset = useCallback(() => {
       const {dataset, metadata} = response;
+      console.log('[tile load ] createTileDataset dataset, metadata:',dataset,metadata)
       if (dataset) {
         onTilesetAdded(dataset, metadata);
       }
@@ -142,7 +143,7 @@ function LoadTilesetTabFactory() {
       });
       return types;
     }, [enableRasterTileLayer, enableWMSLayer]);
-
+    console.log('[tile forms]: currentForm ',typeIndex,tileTypes)
     const CurrentForm = tileTypes[typeIndex].Component;
 
     return (

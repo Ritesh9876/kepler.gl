@@ -74,6 +74,8 @@ export default function useFetchVectorTileMetadata({
           }
 
           const processedMetadata = process(metadata);
+          console.log('[tile] metadata setreponse ',processedMetadata)
+
           if (processedMetadata instanceof Error) {
             setError(processedMetadata);
           } else {

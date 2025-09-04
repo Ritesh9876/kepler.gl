@@ -174,7 +174,7 @@ export default function ModalContainerFactory(
       this.props.visStateActions.loadFiles(fileList);
     };
 
-    _onTilesetAdded = (
+    _onTilesetAdded = ( // use this to directly add programmtically
       tileset: {name: string; type: string; metadata: Record<string, any>},
       processedMetadata?: Record<string, any>
     ) => {

@@ -122,7 +122,10 @@ const TilesetVectorForm: React.FC<TilesetVectorFormProps> = ({setResponse}) => {
 
   const process = useMemo(() => {
     return (value: PMTilesMetadata | TileJSON) =>
-      parseVectorMetadata(value, {tileUrl: metadataUrl});
+    {
+      console.log('[tile] parseVectorMetadata inputs ',value,metadataUrl)
+      return parseVectorMetadata(value, {tileUrl: metadataUrl});
+    }
   }, [metadataUrl]);
 
   const {
@@ -151,7 +154,7 @@ const TilesetVectorForm: React.FC<TilesetVectorFormProps> = ({setResponse}) => {
           error: new Error('For .pmtiles in raster format, please use the Raster Tile form.')
         });
       }
-
+      console.log('[tile] data params ',tileName,tileUrl,metadataUrl)
       const dataset = getDatasetAttributesFromVectorTile({
         name: tileName,
         dataUrl: tileUrl,

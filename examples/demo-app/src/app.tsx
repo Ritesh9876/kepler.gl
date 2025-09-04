@@ -20,7 +20,7 @@ import {
 } from '@kepler.gl/ai-assistant';
 import {panelBorderColor, theme} from '@kepler.gl/styles';
 import {ParsedConfig} from '@kepler.gl/types';
-import {getApplicationConfig} from '@kepler.gl/utils';
+import {getApplicationConfig,} from '@kepler.gl/utils';
 import {SqlPanel} from '@kepler.gl/duckdb';
 import Banner from './components/banner';
 import Announcement, {FormLink} from './components/announcement';
@@ -29,6 +29,8 @@ import {replaceMapControl} from './factories/map-control';
 import {replacePanelHeader} from './factories/panel-header';
 import {CLOUD_PROVIDERS_CONFIGURATION, DEFAULT_FEATURE_FLAGS} from './constants/default-settings';
 import {messages} from './constants/localization';
+import {PMTilesSource, PMTilesMetadata} from '@loaders.gl/pmtiles';
+import {MVTSource, TileJSON} from '@loaders.gl/mvt';
 
 import {
   loadRemoteMap,
@@ -42,7 +44,8 @@ import {
   addDataToMap,
   replaceDataInMap,
   toggleMapControl,
-  toggleModal
+  toggleModal,
+  updateVisData
 } from '@kepler.gl/actions';
 import {CLOUD_PROVIDERS} from './cloud-providers';
 import {Panel, PanelGroup, PanelResizeHandle} from 'react-resizable-panels';
@@ -72,8 +75,29 @@ import sampleIconCsv from './data/sample-icon-csv';
 import sampleGpsData from './data/sample-gps-data';
 import sampleRowData, {config as rowDataConfig} from './data/sample-row-data';
 import {processCsvData, processGeojson, processRowObject} from '@kepler.gl/processors';
+import { VectorTileDatasetMetadata, ALL_FIELD_TYPES,DatasetType, REMOTE_TILE, RemoteTileFormat } from '@kepler.gl/constants';
+import {
+  FilterProps,
+  NumericFieldFilterProps,
+  StringFieldFilterProps,
+  default as KeplerDataset
+} from '@kepler.gl/table';
+
+import {DATA_TYPES as ANALYZER_DATA_TYPES} from 'type-analyzer';
+import {DATA_TYPES} from 'type-analyzer';
+import { getFilterProps, parseVectorMetadata } from './vector-utils';
+import {Merge} from '@kepler.gl/types';
 
 /* eslint-enable no-unused-vars */
+
+
+export const isPMTilesUrl = (url?: string | null) => url?.includes('.pmtiles');
+
+
+enum PMTilesType {
+  RASTER = 'raster',
+  MVT = 'mvt'
+}
 
 // This implements the default behavior from styled-components v5
 function shouldForwardProp(propName, target) {
@@ -162,14 +186,107 @@ const App = props => {
   const isSqlPanelOpen = useSelector(
     state => duckDbPluginEnabled && state?.demo?.keplerGl?.map?.uiState.mapControls.sqlPanel?.active
   );
-
+  
   const isAiAssistantPanelOpen = useSelector(
     state => state?.demo?.keplerGl?.map?.uiState.mapControls.aiAssistant?.active
   );
-
   const prevQueryRef = useRef<number>(null);
 
-  useEffect(() => {
+
+   const _onTilesetAdded = ( // use this to directly add programmtically
+      tileset: {name: string; type: string; metadata: Record<string, any>},
+      processedMetadata?: Record<string, any>
+    ) => {
+      dispatch(
+      updateVisData(
+        {
+          info: {label: tileset.name, type: tileset.type, format: 'rows'},
+          data: {
+            fields: processedMetadata?.fields || [],
+            rows: []
+          },
+          metadata: {
+            ...processedMetadata,
+            ...tileset.metadata
+          },
+          // Vector tile layer supports GPU filtering for numeric and boolean fields
+          supportedFilterTypes: [
+            ALL_FIELD_TYPES.real,
+            ALL_FIELD_TYPES.integer,
+            ALL_FIELD_TYPES.boolean
+          ],
+          disableDataOperation: true
+        },
+        {
+          autoCreateLayers: true,
+          centerMap: true
+        }
+      ))
+    
+    }
+
+     type VectorTilesetFormData = {
+  name: string;
+  dataUrl: string;
+  metadataUrl?: string;
+};
+
+ type DatasetCreationAttributes = {
+  name: string;
+  type: string;
+  metadata: Record<string, any>;
+};
+
+ type VectorTileDatasetCreationAttributes = Merge<
+  DatasetCreationAttributes,
+  {
+    metadata: VectorTileDatasetMetadata;
+  }
+>;
+    function getDatasetAttributesFromVectorTile({
+  name,
+  dataUrl,
+  metadataUrl
+}: VectorTilesetFormData): VectorTileDatasetCreationAttributes {
+  return {
+    name,
+    type: DatasetType.VECTOR_TILE,
+    metadata: {
+      type: REMOTE_TILE,
+      remoteTileFormat: isPMTilesUrl(dataUrl) ? RemoteTileFormat.PMTILES : RemoteTileFormat.MVT,
+      tilesetDataUrl: dataUrl,
+      tilesetMetadataUrl: metadataUrl
+    }
+  };
+}
+
+  async function xy() {
+    // https://r2-public.protomaps.com/protomaps-sample-datasets/nz-buildings-v3.pmtiles
+    let datauri = 'http://127.0.0.1:8000/api/tiles/{z}/{x}/{y}.pbf'
+    let metauri = 'http://127.0.0.1:8000/api/tiles/metadata.json'
+ let checkmetadata =  PMTilesSource.createDataSource(datauri, {})
+ console.log('**/check edata ',checkmetadata)
+  let metadata = await checkmetadata.metadata;
+
+    let finalData =       parseVectorMetadata(metadata,
+      {tileUrl: datauri}
+    )
+        console.log('[tile metadata] standAlone ',finalData) 
+    
+
+        const dataset = getDatasetAttributesFromVectorTile({
+        name: 'lolo.pbf',
+        dataUrl: datauri,
+        metadataUrl: metauri
+      });
+
+      _onTilesetAdded(dataset, finalData)
+    return finalData
+  }
+
+  useEffect( () => {
+    
+    xy()
     // if we pass an id as part of the url
     // we try to fetch along map configurations
     const cloudProvider = CLOUD_PROVIDERS.find(c => c.name === provider);
