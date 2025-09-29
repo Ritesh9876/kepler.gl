@@ -31,7 +31,7 @@ import {CLOUD_PROVIDERS_CONFIGURATION, DEFAULT_FEATURE_FLAGS} from './constants/
 import {messages} from './constants/localization';
 import {PMTilesSource, PMTilesMetadata} from '@loaders.gl/pmtiles';
 import {MVTSource, TileJSON} from '@loaders.gl/mvt';
-
+import {LayerClasses,VectorTileLayer} from '@kepler.gl/layers'
 import {
   loadRemoteMap,
   loadSampleConfigurations,
@@ -45,7 +45,10 @@ import {
   replaceDataInMap,
   toggleMapControl,
   toggleModal,
-  updateVisData
+  updateVisData,
+  addLayer,
+  layerVisualChannelConfigChange,
+  fitBounds
 } from '@kepler.gl/actions';
 import {CLOUD_PROVIDERS} from './cloud-providers';
 import {Panel, PanelGroup, PanelResizeHandle} from 'react-resizable-panels';
@@ -63,7 +66,7 @@ import sampleTripData, {testCsvData, sampleTripDataConfig} from './data/sample-t
 // import sampleGeojsonPoints from './data/sample-geojson-points';
 import sampleGeojsonConfig from './data/sample-geojson-config';
 import sampleH3Data, {config as h3MapConfig} from './data/sample-hex-id-csv';
-import sampleS2Data, {config as s2MapConfig, dataId as s2DataId} from './data/sample-s2-data';
+import sampleS2Data, {config as s2MapConfig, dataId as s2DataId, dataId} from './data/sample-s2-data';
 import sampleAnimateTrip, {
   pointData,
   pointDataId,
@@ -87,7 +90,9 @@ import {DATA_TYPES as ANALYZER_DATA_TYPES} from 'type-analyzer';
 import {DATA_TYPES} from 'type-analyzer';
 import { getFilterProps, parseVectorMetadata } from './vector-utils';
 import {Merge} from '@kepler.gl/types';
-
+import { findDefaultLayer } from '@kepler.gl/reducers';
+import {guessDefaultLayer} from '@kepler.gl/ai-assistant'
+import { validconfig, validdata } from './data/test_data';
 /* eslint-enable no-unused-vars */
 
 
@@ -179,13 +184,19 @@ const App = props => {
   const [showBanner, toggleShowBanner] = useState(false);
   const {params: {id, provider} = {}, location: {query = {}} = {}} = props;
   const dispatch = useDispatch();
-
+  const [used,setUsed] = useState(false)
+  let xx = 'railroads.pmtiles1'
   // TODO find another way to check for existence of duckDb plugin
   const duckDbPluginEnabled = (getApplicationConfig().plugins || []).some(p => p.name === 'duckdb');
+  const xfields = useSelector( state =>  state?.demo?.keplerGl?.map?.visState?.datasets?.[xx]?.fields)
+  const xdataset =  useSelector( state =>  state?.demo?.keplerGl?.map?.visState?.datasets)
+    const xvisState =  useSelector( state =>  state?.demo?.keplerGl?.map?.visState)
 
   const isSqlPanelOpen = useSelector(
     state => duckDbPluginEnabled && state?.demo?.keplerGl?.map?.uiState.mapControls.sqlPanel?.active
   );
+
+
   
   const isAiAssistantPanelOpen = useSelector(
     state => state?.demo?.keplerGl?.map?.uiState.mapControls.aiAssistant?.active
@@ -197,17 +208,19 @@ const App = props => {
       tileset: {name: string; type: string; metadata: Record<string, any>},
       processedMetadata?: Record<string, any>
     ) => {
+      console.log('**/tileset ',tileset,processedMetadata)
       dispatch(
       updateVisData(
         {
-          info: {label: tileset.name, type: tileset.type, format: 'rows'},
+          info: {id: 'lolo.pbf',label: tileset.name, type: tileset.type, format: 'rows'},
           data: {
             fields: processedMetadata?.fields || [],
             rows: []
           },
           metadata: {
             ...processedMetadata,
-            ...tileset.metadata
+            ...tileset.metadata,
+            colorField: 'devices_monthly'
           },
           // Vector tile layer supports GPU filtering for numeric and boolean fields
           supportedFilterTypes: [
@@ -220,6 +233,25 @@ const App = props => {
         {
           autoCreateLayers: true,
           centerMap: true
+        },
+        {
+          visState: {
+            layers: [
+            {
+              id: 'testLayer.pbf',
+              type: 'vector-tile',
+              config: {
+                dataId: 'lolo.pbf',
+                label: 'lolo.pbf',
+                color: [255, 0, 0],
+                columns: {
+
+                }
+              }
+            }
+          ]
+
+          }
         }
       ))
     
@@ -260,10 +292,10 @@ const App = props => {
   };
 }
 
-  async function xy() {
+  async function xy(id: number | string) {
     // https://r2-public.protomaps.com/protomaps-sample-datasets/nz-buildings-v3.pmtiles
-    let datauri = 'http://127.0.0.1:8000/api/tiles/{z}/{x}/{y}.pbf'
-    let metauri = 'http://127.0.0.1:8000/api/tiles/metadata.json'
+    let datauri = 'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles.pmtiles?report_id=37167'
+    let metauri = 'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles.pmtiles?report_id=37167'
  let checkmetadata =  PMTilesSource.createDataSource(datauri, {})
  console.log('**/check edata ',checkmetadata)
   let metadata = await checkmetadata.metadata;
@@ -275,7 +307,7 @@ const App = props => {
     
 
         const dataset = getDatasetAttributesFromVectorTile({
-        name: 'lolo.pbf',
+        name: `lolo_${id}.pbf`,
         dataUrl: datauri,
         metadataUrl: metauri
       });
@@ -284,9 +316,151 @@ const App = props => {
     return finalData
   }
 
+  
+
+
+
+  function findDefaultLayer2(dataset, layerClasses) {
+  if (!dataset) {
+    return [];
+  }
+
+  const layerProps = (Object.keys(layerClasses)).reduce(
+    (previous, lc) => {
+      const result =
+        typeof layerClasses[lc].findDefaultLayerProps === 'function'
+          ? layerClasses[lc].findDefaultLayerProps(dataset, previous)
+          : {props: []};
+
+      const props = Array.isArray(result) ? result : result.props || [];
+      const foundLayers = result.foundLayers || previous;
+
+      return foundLayers.concat(
+        props.map(p => ({
+          ...p,
+          type: lc,
+          dataId: dataset.id,
+          // set arc layer initial visiblity to false, because arcs tend to be too musy
+          ...(lc === 'arc' || lc === 'line' ? {isVisible: false} : {})
+        }))
+      );
+    },
+    [] 
+  );
+  
+  // go through all layerProps to create layer
+  let xx =  layerProps.map(props => {
+    const layer = new layerClasses[props.type](props);
+    
+  //  return layer
+     typeof layer.setInitialLayerConfig === 'function' && dataset.dataContainer
+      ? layer.setInitialLayerConfig(dataset)
+      : layer;
+
+      return layer.updateLayerConfig({
+    colorField: dataset.fields.find(item => item.name === 'devices_monthly')
+  })
+  });
+  
+    console.log('**/[findDefaultLayer] came here',layerProps,xx,dataset)
+
+  return xx
+
+}
+
+
+  useEffect(() => {
+    console.log('**/xfields ',xfields)
+
+    if(!xfields) return;
+    if(used) return;
+
+    let kkfield = xfields.find(item => item.name === 'devices_monthly')
+    console.log('**/xfields single ',kkfield)
+       // xy(1)
+    // xy(2)
+      setUsed(true)
+    let layer1 = new LayerClasses['vectorTile']({
+    "dataId": "railroads.pmtiles1",
+    "label": "testadd.pmtiles",
+    "isVisible": true,
+    "type": "vectorTile"
+})
+// let koko =findDefaultLayer2(xdataset[xx],LayerClasses) //findDefaultLayer(xdataset[xx],LayerClasses)
+layer1.updateLayerMeta(xdataset[xx],xdataset)
+layer1.setInitialLayerConfig(xdataset[xx])
+
+console.log('[app.tsx] layer1 before color update',layer1,xdataset[xx])
+ // kkfield
+// layer1.updateLayerConfig({
+//   colorField: kkfield
+// //   {
+// //     "name": "devices_monthly",
+// //     "id": "devices_monthly",
+// //     // "format": "",
+// //     // "filterProps": {
+// //     //     "domain": [
+// //     //         3,
+// //     //         1024
+// //     //     ],
+// //     //     "value": [
+// //     //         3,
+// //     //         1024
+// //     //     ],
+// //     //     "type": "range",
+// //     //     "typeOptions": [
+// //     //         "range"
+// //     //     ],
+// //     //     "gpu": true,
+// //     //     "step": 1
+// //     // },
+// //     "type": "real",
+// //     // "analyzerType": "FLOAT",
+// //     // "fieldIdx": 6,
+// //     // "displayName": "devices_monthly"
+// // }
+// })
+console.log('[app.tsx] layer1',layer1)
+
+  //  if(xvisState)
+    dispatch(fitBounds(xvisState?.datasets[xx]?.metadata?.bounds))
+    dispatch(addLayer(layer1,'railroads.pmtiles1'))
+    dispatch(layerVisualChannelConfigChange(layer1,{
+    colorField: kkfield,
+   
+    },
+     'color'
+  ))
+        // _loadVectorTileData()
+  // setTimeout(() => {
+  //   dispatch(addLayer(layer1,'railroads.pmtiles1'))
+  // },5000)
+
+  },[xfields])
+
+
+  useEffect(() => {
+        dispatch(
+      addDataToMap({
+        options: {
+         autoCreateLayers: false
+        },
+        datasets: [
+          {
+            info: {
+              label: 'test_data',
+              id: 'test_data'
+            },
+            data:processRowObject(validdata), //    processRowObject(sampleRowData), // 
+          }
+        ],
+        config: validconfig //   rowDataConfig // 
+      }) 
+    );
+  },[])
   useEffect( () => {
     
-    xy()
+ _loadVectorTileData()
     // if we pass an id as part of the url
     // we try to fetch along map configurations
     const cloudProvider = CLOUD_PROVIDERS.find(c => c.name === provider);
@@ -388,83 +562,136 @@ const App = props => {
               label: 'Sample Visit Data',
               id: 'sample_visit_data'
             },
-            data: processRowObject(sampleRowData)
+            data: processRowObject(sampleRowData)//processRowObject(sampleRowData)
           }
         ],
-        config: rowDataConfig
+        config: rowDataConfig //rowDataConfig
       })
     );
   }, [dispatch]);
 
-  const _loadVectorTileData = useCallback(() => {
+  const _loadVectorTileData = useCallback(async () => {
+    let randomnum = 1//Math.random()
+    
+let datauri = 'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles.pmtiles?report_id=37167'
+    let metauri = 'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles.pmtiles?report_id=37167'
+ let checkmetadata =  PMTilesSource.createDataSource(datauri, {
+
+  loadOptions: {
+          
+    fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+      console.log('**/fetch PMTiles with auth', input);
+      const authToken = 'helloworld';// this.getAuthToken();
+      const authInit: RequestInit = {
+        ...init,
+        headers: {
+          ...init?.headers,
+          // Add authorization token if available
+         ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+        }
+      };
+      return fetch(input, authInit);
+    }
+  }
+ })
+ return
+  let metadata = await checkmetadata.metadata;
+
+    let processedMetadata =       parseVectorMetadata(metadata,
+      {tileUrl: datauri}
+    )
+    
+
+        const tileset = getDatasetAttributesFromVectorTile({
+        name: `lolo_${id}.pbf`,
+        dataUrl: datauri,
+        metadataUrl: metauri
+      });
+
+    
     dispatch(
       addDataToMap({
         datasets: [
           {
             info: {
-              label: 'Railroads',
-              id: 'railroads.pmtiles',
+              label: 'Railroads' + randomnum,
+              id: 'railroads.pmtiles' + randomnum,
               color: [255, 0, 0],
               type: 'vector-tile'
             },
             data: {
               rows: [],
-              fields: [
-                {
-                  name: 'continent',
-                  type: 'string',
-                  format: '',
-                  analyzerType: 'STRING'
-                }
-              ]
+              fields: processedMetadata?.fields || [],
             },
+            supportedFilterTypes: [
+            ALL_FIELD_TYPES.real,
+            ALL_FIELD_TYPES.integer,
+            ALL_FIELD_TYPES.boolean
+          ],
             metadata: {
-              name: 'output.pmtiles',
-              description: 'output.pmtiles',
-              type: 'remote',
-              remoteTileFormat: 'pmtiles',
-              tilesetDataUrl:
-                'https://4sq-studio-public.s3.us-west-2.amazonaws.com/pmtiles-test/161727fe-7952-4e57-aa05-850b3086b0b2.pmtiles',
-              tilesetMetadataUrl:
-                'https://4sq-studio-public.s3.us-west-2.amazonaws.com/pmtiles-test/161727fe-7952-4e57-aa05-850b3086b0b2.pmtiles',
-              id: 'sz6uy1xtj',
+              ...processedMetadata,
+            ...tileset.metadata,
+          
+            //   name: 'output.pmtiles',
+            //   description: 'output.pmtiles',
+            //   type: 'remote',
+            //   remoteTileFormat: 'pmtiles',
+            //   tilesetDataUrl:'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles-2.pmtiles?report_id=35390',
+            //     //'https://4sq-studio-public.s3.us-west-2.amazonaws.com/pmtiles-test/161727fe-7952-4e57-aa05-850b3086b0b2.pmtiles',
+            //   tilesetMetadataUrl:
+            //   'http://localhost:11005/sherlock/api/v3/mobility/delta/get_pmtiles-2.pmtiles?report_id=35390',
+            //  //   'https://4sq-studio-public.s3.us-west-2.amazonaws.com/pmtiles-test/161727fe-7952-4e57-aa05-850b3086b0b2.pmtiles',
+            //   id: 'sz6uy1xtj',
               format: 'rows',
-              label: 'output.pmtiles',
-              metaJson: null,
-              bounds: [-150.1122219, -51.8952777, 179.3577783, 69.6043747],
-              center: [14.0625, 50.7026397, 6],
-              maxZoom: 6,
-              minZoom: 0,
-              fields: [
-                {
-                  name: 'continent',
-                  id: 'continent',
-                  format: '',
-                  filterProps: {
-                    domain: [
-                      'Africa',
-                      'Asia',
-                      'Europe',
-                      'North America',
-                      'Oceania',
-                      'South America'
-                    ],
-                    value: [],
-                    type: 'multiSelect',
-                    gpu: false
-                  },
-                  type: 'string',
-                  analyzerType: 'STRING'
-                }
-              ]
+            //   label: 'output.pmtiles',
+            //   metaJson: null,
+            //   bounds: [-150.1122219, -51.8952777, 179.3577783, 69.6043747],
+            //   center: [14.0625, 50.7026397, 6],
+            //   // colorField: 'category',
+            //   // visualChannels: {
+            //   //   colorField: {name: 'category'}
+            //   // },
+            //   maxZoom: 6,
+            //   minZoom: 0,
+              // fields: [
+              //   {
+              //     name: 'continent',
+              //     id: 'continent',
+              //     format: '',
+              //     filterProps: {
+              //       domain: [
+              //         'Africa',
+              //         'Asia',
+              //         'Europe',
+              //         'North America',
+              //         'Oceania',
+              //         'South America'
+              //       ],
+              //       value: [],
+              //       type: 'multiSelect',
+              //       gpu: false
+              //     },
+              //     type: 'string',
+              //     analyzerType: 'STRING'
+              //   }
+              // ]
             }
           }
         ],
         options: {
-          autoCreateLayers: true
+          autoCreateLayers: false
         }
       })
     );
+
+
+  //   let layer1 = 
+  //   dispatch(layerVisualChannelConfigChange(xlayer[0],{
+  //   colorField: kkfield,
+   
+  //   },
+  //    'color'
+  // ))
   }, [dispatch]);
 
   const _loadPointData = useCallback(() => {

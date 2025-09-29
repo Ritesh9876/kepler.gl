@@ -90,14 +90,26 @@ export function findDefaultLayer(dataset: KeplerTable, layerClasses: LayerClasse
     },
     [] as (FindDefaultLayerProps & {type: string})[]
   );
-
+  
   // go through all layerProps to create layer
-  return layerProps.map(props => {
+  let xx =  layerProps.map(props => {
     const layer = new layerClasses[props.type](props);
-    return typeof layer.setInitialLayerConfig === 'function' && dataset.dataContainer
+    
+  //  return layer
+     typeof layer.setInitialLayerConfig === 'function' && dataset.dataContainer
       ? layer.setInitialLayerConfig(dataset)
       : layer;
+
+       layer.updateLayerConfig({
+    colorField: dataset.fields.find(item => item.name === 'devices_monthly')
+  })
+  return layer
   });
+  
+    console.log('**/[findDefaultLayer] came here',layerProps,xx,dataset)
+
+  return xx
+
 }
 
 type MinVisStateForLayerData = {
@@ -119,6 +131,7 @@ export function calculateLayerData<S extends MinVisStateForLayerData>(
   layerData: any;
   layer: Layer;
 } {
+  console.log('**/fetch [calculateLayerData] came here',layer, state, oldLayerData)
   let layerData;
   try {
     // Make sure the layer updates data after an error

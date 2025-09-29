@@ -160,6 +160,7 @@ export default function LayerConfiguratorFactory(
     }
 
     _renderVectorTileLayerConfig(props) {
+     
       return <VectorTileLayerConfigurator {...props} />;
     }
 

@@ -210,11 +210,23 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
 
   constructor(props: ConstructorParameters<typeof AbstractTileLayer>[0]) {
     super(props);
+        console.log('[vector-tile-layer] constructor ',this)
+
     this.registerVisConfig(vectorTileVisConfigs);
     this.tileDataset = this.initTileDataset();
   }
 
   meta = {};
+
+  // TODO: Implement this method to return your authorization token
+  // You can get the token from props, config, context, or global state
+  private getAuthToken(): string | null {
+    // Example implementations:
+    // return this.config.authToken; // if you add authToken to config
+    // return window.localStorage.getItem('authToken');
+    // return this.props.authToken; // if passed as prop
+    return null; // Replace with your token logic
+  }
 
   static findDefaultLayerProps(dataset: KeplerDataset): FindDefaultLayerPropsReturnValue {
     if (dataset.type !== DatasetType.VECTOR_TILE) {
@@ -437,6 +449,7 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
       const remoteTileFormat = datasetMetadata?.remoteTileFormat;
       if (remoteTileFormat === RemoteTileFormat.MVT) {
         const transformFetch = async (input: RequestInfo | URL, init?: RequestInit | undefined) => {
+          console.log('**/fetch vector-tile-layer transformfetch', input)
           const requestData: RequestParameters = {
             url: input as string,
             searchParams: new URLSearchParams(),
@@ -458,9 +471,43 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
             })
           : null;
       } else if (remoteTileFormat === RemoteTileFormat.PMTILES) {
+        console.log('**/fetch vector-tile-layer 0', remoteTileFormat)
+        
         // TODO: to render image pmtiles need to use TileLayer and BitmapLayer (https://github.com/visgl/loaders.gl/blob/master/examples/website/tiles/components/tile-source-layer.ts)
         tilesetDataUrl = datasetMetadata?.tilesetDataUrl;
-        tileSource = tilesetDataUrl ? PMTilesSource.createDataSource(tilesetDataUrl, {}) : null;
+        
+        // Alternative approach: Modify URL to include auth token as query parameter
+        // This works if your server supports token-based auth via URL params
+        const authToken = 'helloworld';// this.getAuthToken();
+        if (authToken && tilesetDataUrl) {
+          const url = new URL(tilesetDataUrl);
+          url.searchParams.set('token', authToken);
+          tilesetDataUrl = url.toString();
+          console.log('**/PMTiles URL with auth token:', tilesetDataUrl);
+        }
+        
+        // Create custom fetch for PMTiles with auth headers
+        const authFetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+          console.log('**/fetch PMTiles with auth', input);
+          const authToken = 'helloworld';// this.getAuthToken();
+          const authInit: RequestInit = {
+            ...init,
+            headers: {
+              ...init?.headers,
+              // Add authorization token if available
+              ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+            }
+          };
+          return fetch(input, authInit);
+        };
+        
+        // Try passing custom fetch to PMTiles via loadOptions
+        tileSource = tilesetDataUrl ? PMTilesSource.createDataSource(tilesetDataUrl, {
+          loadOptions: {
+          
+            fetch: authFetch
+          }
+        }) : null;
       }
     }
 
@@ -530,11 +577,15 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
       : undefined;
 
     const colorField = this.config.colorField as KeplerField;
+    console.log('**/[test] color field ',colorField)
     const heightField = this.config.heightField as KeplerField;
     const strokeColorField = this.config.strokeColorField as KeplerField;
     const sizeField = this.config.sizeField as KeplerField;
     const radiusField = this.config.radiusField as KeplerField;
+        console.log('**/check this data ',getLoaderOptions().mvt
+      )
 
+      
     if (data.tileSource) {
       const hoveredObject = this.hasHoveredObject(objectHovered);
 
@@ -543,8 +594,25 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
           ...defaultLayerProps,
           ...data,
           onViewportLoad: this.onViewportLoad,
-          data: data.tilesetDataUrl,
-          getTileData: data.tileSource?.getTileData,
+          data: data.tilesetDataUrl, //  "http://127.0.0.1:8000/api/download-pmtiles-3.pmtiles/{z}/{x}/{y}.pbf"
+          getTileData:async (input: RequestInfo | URL, init?: RequestInit) => {
+            console.log('**/fetch PMTiles with auth', input);
+            const authToken = 'helloworld';// this.getAuthToken();
+            const authInit: RequestInit = {
+              ...init,
+              headers: {
+                ...init?.headers,
+                // Add authorization token if available
+                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+              }
+            };
+            return fetch(input.url, {
+              headers:{
+                Authorization: `Bearer ${authToken}`
+              }
+            });
+          },
+          // data.tileSource?.getTileData ,
           tileSource: data.tileSource,
           getFilterValue: this.getGpuFilterValueAccessor(opts),
           filterRange: gpuFilter.filterRange,
@@ -631,8 +699,34 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
               }
             }
           },
+          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+            console.log('**/fetch PMTiles with auth', input);
+            const authToken = 'helloworld';// this.getAuthToken();
+            const authInit: RequestInit = {
+              ...init,
+              headers: {
+                ...init?.headers,
+                // Add authorization token if available
+                ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+              }
+            };
+            return fetch(input, authInit);
+          },
           loadOptions: {
-            mvt: getLoaderOptions().mvt
+            mvt: getLoaderOptions().mvt,
+            fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+              console.log('**/fetch PMTiles with auth', input);
+              const authToken = 'helloworld';// this.getAuthToken();
+              const authInit: RequestInit = {
+                ...init,
+                headers: {
+                  ...init?.headers,
+                  // Add authorization token if available
+                  ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                }
+              };
+              return fetch(input, authInit);
+            }
           }
         }),
         // hover layer
@@ -650,7 +744,7 @@ export default class VectorTileLayer extends AbstractTileLayer<VectorTile, Featu
                 getLineWidth: visConfig.strokeWidth + 1,
                 lineWidthUnits: 'pixels',
                 stroked: true,
-                filled: true
+                filled: true,
               })
             ]
           : [])

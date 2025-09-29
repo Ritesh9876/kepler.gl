@@ -309,6 +309,7 @@ export default abstract class AbstractTileLayer<
 
   setInitialLayerConfig(dataset: KeplerDataset): AbstractTileLayer<T, I> {
     const defaultColorField = findDefaultColorField(dataset);
+    console.log('**/[abstract-tile-layer] came here', defaultColorField)
 
     if (defaultColorField) {
       this.updateLayerConfig({
@@ -316,7 +317,7 @@ export default abstract class AbstractTileLayer<
       });
       this.updateLayerVisualChannel(dataset, 'color');
     }
-
+    console.log('**/[abstract-tile-layer] this', this)
     return this;
   }
 

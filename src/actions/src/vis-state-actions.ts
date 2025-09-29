@@ -868,7 +868,7 @@ export type UpdateVisDataUpdaterAction = {
  * @param options.readOnly `default: false` if `readOnly` is set to `true`
  * the left setting panel will be hidden
  * @param config this object will contain the full kepler.gl instance configuration {mapState, mapStyle, visState}
- * @returns action
+ * @returns action 
  * @public
  */
 export function updateVisData(

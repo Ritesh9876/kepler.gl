@@ -729,7 +729,23 @@ export const getFieldsFromTile = async ({
                 metadataUrl: decodeURIComponent(metadataUrl)
               }
             })
-          : PMTilesSource.createDataSource(tilesetUrl, {});
+          : PMTilesSource.createDataSource(tilesetUrl, {
+            loadOptions: {
+              fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+                console.log('**/fetch PMTiles with auth', input);
+                const authToken = 'helloworld';// this.getAuthToken();
+                const authInit: RequestInit = {
+                  ...init,
+                  headers: {
+                    ...init?.headers,
+                    // Add authorization token if available
+                    ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                  }
+                };
+                return fetch(input, authInit);
+              }
+            }
+          });
       const tile = await tileSource.getTileData({index: tileIndices} as any);
       const updatedFields = tileToFields(tile).map(f => {
         return {

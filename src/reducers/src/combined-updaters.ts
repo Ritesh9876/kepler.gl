@@ -140,6 +140,8 @@ export const addDataToMapUpdater = (
 ): KeplerGlState => {
   const {datasets, config, info} = payload;
 
+    console.log('**/[add_data_to_map] state',state)
+
   const options = {
     ...defaultAddDataToMapOptions,
     ...payload.options
@@ -171,6 +173,7 @@ export const addDataToMapUpdater = (
     // @ts-expect-error
     parsedConfig = state.visState.schema.parseSavedConfig(config);
   }
+  console.log('**/[add_data_to_map] parsedconfig',parsedConfig)
   const oldLayers = state.visState.layers;
   const filterNewlyAddedLayers = (layers: Layer[]) =>
     layers.filter(nl => !oldLayers.find(ol => ol === nl));
@@ -190,7 +193,7 @@ export const addDataToMapUpdater = (
         config: parsedConfig
       })
     ),
-
+    
     if_(Boolean(info), pick_('visState')(apply_<VisState, any>(setMapInfoUpdater, {info}))),
     // Note that fit bounds here won't be called in case datasets are created in Tasks.
     // A separate Task to update bounds is created once the datasets are ready.

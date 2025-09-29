@@ -180,7 +180,7 @@ async function executeAddLayer(args, options): Promise<ExecuteAddLayerResult> {
 
     // check if layerType is valid
     let layer = guessDefaultLayer(dataset, layerType);
-
+    console.log('[executeAddLayer] layer',layer)
     const layerId = layer?.id || `layer_${generateId()}`;
 
     if (!layer) {
@@ -231,7 +231,7 @@ async function executeAddLayer(args, options): Promise<ExecuteAddLayerResult> {
         }, {})
       }
     };
-
+    console.log('**/[layer-creation-tool] colorBy',colorBy)
     if (colorBy) {
       const colorField = dataset.fields.find(f => f.name === colorBy);
       if (!colorField) {

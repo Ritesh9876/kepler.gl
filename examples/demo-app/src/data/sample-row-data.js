@@ -102,7 +102,7 @@ export const config = {
           id: 'iulge5',
           type: 'point',
           config: {
-            dataId: 'sample_visit_data',
+            dataId: 'test_data',
             label: 'point',
             columns: {
               lat: 'latitude',
@@ -120,7 +120,7 @@ export const config = {
           },
           visualChannels: {
             colorField: {
-              name: 'count',
+              name: 'id',
               type: 'integer'
             },
             colorScale: 'quantile'

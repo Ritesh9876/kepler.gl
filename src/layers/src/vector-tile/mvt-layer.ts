@@ -25,7 +25,6 @@ export class MVTLayer<ExtraProps> extends _MVTLayer<ExtraProps> {
   getTileData(tile: _TileLoadProps): any {
     const {getTileData} = this.props;
     const {data} = this.state;
-
     tile.url =
       typeof data === 'string' || Array.isArray(data) ? _getURLFromTemplate(data, tile) : null;
     if (getTileData) {

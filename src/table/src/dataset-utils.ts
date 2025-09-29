@@ -137,7 +137,7 @@ async function createTable(datasetInfo: CreateTableProps) {
     metadata
   });
   await table.importData({data});
-
+  console.log('**/test here ',table)
   return table;
 }
 const UPDATE_TABLE_TASK = Task.fromPromise(updateTable, 'UPDATE_TABLE_TASK');
@@ -165,6 +165,7 @@ async function refreshRemoteData(datasetInfo: CreateTableProps): Promise<object 
 async function refreshVectorTileMetadata(
   datasetInfo: CreateTableProps
 ): Promise<VectorTileMetadata | null> {
+  // return null
   const {remoteTileFormat, tilesetMetadataUrl, tilesetDataUrl} =
     (datasetInfo.opts.metadata as VectorTileDatasetMetadata) || {};
 
@@ -181,11 +182,31 @@ async function refreshVectorTileMetadata(
     if (remoteTileFormat === RemoteTileFormat.MVT) {
       rawMetadata = await getMVTMetadata(tilesetMetadataUrl);
     } else {
-      const tileSource = PMTilesSource.createDataSource(tilesetMetadataUrl, {});
+      console.log('**/fetch dataset-utils 0',remoteTileFormat)
+
+      const tileSource = PMTilesSource.createDataSource(tilesetMetadataUrl, {
+        loadOptions: {  
+          fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+            console.log('**/fetch PMTiles with auth', input);
+           const authToken = 'helloworld';// this.getAuthToken();
+            const authInit: RequestInit = {
+              ...init,
+              headers: {
+                ...init?.headers,
+                // Add authorization token if available
+               ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+              }
+            };
+            return fetch(input, authInit);
+          }
+        }
+      });
       rawMetadata = await tileSource.metadata;
     }
 
     if (rawMetadata) {
+            console.log('**/fetch dataset-utils 1',remoteTileFormat)
+
       const metadata = parseVectorMetadata(rawMetadata);
 
       await getFieldsFromTile({
@@ -194,7 +215,7 @@ async function refreshVectorTileMetadata(
         metadataUrl: tilesetMetadataUrl,
         metadata
       });
-
+            console.log('**/fetch dataset-utils 2',metadata)
       return metadata;
     }
   } catch (err) {

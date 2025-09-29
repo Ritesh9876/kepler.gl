@@ -1764,6 +1764,7 @@ export const addLayerUpdater = (
     }
 
     const result = calculateLayerData(newLayer, state);
+    console.log('**/fetch [addLayerUpdater] result', result)
     newLayer = result.layer;
     newLayerData = result.layerData;
   } else {
@@ -2147,6 +2148,8 @@ export const receiveMapConfigUpdater = (
     payload: ReceiveMapConfigPayload;
   }
 ): VisState => {
+    console.log('**/[receiveMapConfigUpdater] config ',config)
+
   if (!config.visState) {
     return state;
   }
@@ -2165,7 +2168,7 @@ export const receiveMapConfigUpdater = (
       );
     }
   }
-
+  console.log('**/[receiveMapConfigUpdater] mergedState ',mergedState)
   return mergedState;
 };
 
@@ -2348,7 +2351,7 @@ export const updateVisDataUpdater = (
 ): VisState => {
   // datasets can be a single data entries or an array of multiple data entries
   const {config, options} = action;
-
+  console.log('**/[updateVisDataUpdater] config ',config)
   // apply config if passed from action
   // TODO: we don't handle async mergers here yet
   let updatedState = config
@@ -2385,7 +2388,10 @@ export const updateVisDataUpdater = (
 
   const datasetsAllSettledTask = createDatasetTasks.length
     ? Task.allSettled(createDatasetTasks).map(results =>
-        createNewDatasetSuccess({results, addToMapOptions: options})
+        {
+          console.log('**/check this one ',results,options  )
+          return createNewDatasetSuccess({results, addToMapOptions: options})
+        }
       )
     : null;
 
@@ -2404,6 +2410,7 @@ export const createNewDatasetSuccessUpdater = (
   action: PayloadAction<CreateNewDatasetSuccessPayload>
 ): VisState => {
   const {results, addToMapOptions} = action.payload;
+  console.log('**/result is ',state,results)
   const notificationTasks: Task[] = [];
 
   const newDataEntries = results.reduce((accu, result, idx) => {
@@ -2426,12 +2433,18 @@ export const createNewDatasetSuccessUpdater = (
       return accu;
     }
   }, {} as Datasets);
+
+    console.log('**/[createNewDatasetSuccessUpdater] newDataEntries ',newDataEntries)
+    console.log('**/[createNewDatasetSuccessUpdater] mergeDatasetsByOrder ',{
+    ...state,
+    datasets: mergeDatasetsByOrder(state, newDataEntries)
+  })
   // save new dataset entry to state
   const mergedState = {
     ...state,
     datasets: mergeDatasetsByOrder(state, newDataEntries)
   };
-
+  console.log('**/[createNewDatasetSuccessUpdater] mergedState ',mergedState)
   // merge state with config to be merged
   const layerMergers = state.mergers.filter(m => m.waitForLayerData);
   const datasetMergers = state.mergers.filter(m => !layerMergers.includes(m));
@@ -2944,6 +2957,7 @@ export function addDefaultLayers(
   const empty: Layer[] = [];
   const defaultLayers = Object.values(datasets).reduce((accu: Layer[], dataset) => {
     const foundLayers = findDefaultLayer(dataset, state.layerClasses);
+    console.log('**/[vis-state-updaters] foundLayers',foundLayers)
     return foundLayers && foundLayers.length ? accu.concat(foundLayers) : accu;
   }, empty);
 

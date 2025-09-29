@@ -44,7 +44,7 @@ export default function useFetchJson({
       setData(null);
       if (url) {
         setLoading(true);
-
+        console.log('**/fetch useFetchjson ', rasterTileType)
         try {
           let rawMetadata: PMTilesMetadata | JsonObjectOrArray | null = null;
           if (rasterTileType === RasterTileType.PMTILES) {

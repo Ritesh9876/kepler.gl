@@ -80,6 +80,7 @@ import {MapViewStateContext} from './map-view-state-context';
 import ErrorBoundary from './common/error-boundary';
 import {LOCALE_CODES} from '@kepler.gl/localization';
 import {MapView} from '@deck.gl/core';
+
 import {
   MapStyle,
   areAnyDeckLayersLoading,

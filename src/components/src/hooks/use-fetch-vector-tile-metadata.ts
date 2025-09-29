@@ -54,6 +54,7 @@ export default function useFetchVectorTileMetadata({
 
         try {
           let metadata: PMTilesMetadata | TileJSON | null = null;
+          console.log('**/fetch usefetch 0',remoteTileFormat)
           if (remoteTileFormat === RemoteTileFormat.MVT) {
             metadata = await getMVTMetadata(metadataUrl);
 
@@ -64,7 +65,23 @@ export default function useFetchVectorTileMetadata({
             //   }
             // })
           } else {
-            const tileSource = PMTilesSource.createDataSource(metadataUrl, {});
+            const tileSource = PMTilesSource.createDataSource(metadataUrl, {
+              loadOptions: {
+                fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+                  console.log('**/fetch PMTiles with auth', input);
+                  const authToken = 'helloworld';// this.getAuthToken();
+                  const authInit: RequestInit = {
+                    ...init,
+                    headers: {
+                      ...init?.headers,
+                      // Add authorization token if available
+                      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                    }
+                  };
+                  return fetch(input, authInit);
+                }
+              }
+            });
             metadata = await tileSource.metadata;
           }
 

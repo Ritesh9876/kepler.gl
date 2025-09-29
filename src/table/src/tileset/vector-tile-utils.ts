@@ -705,12 +705,15 @@ export const getFieldsFromTile = async ({
   metadataUrl,
   metadata
 }: GetFieldsFromTileProps) => {
+
   try {
+    
+
     if (
       tilesetUrl &&
       metadataUrl &&
       metadata &&
-      metadata.fields?.length === 0 &&
+     metadata.fields?.length === 0 &&
       metadata.minZoom &&
       metadata.bounds?.length === 4 &&
       (!metadata.pmtilesType || metadata.pmtilesType === PMTilesType.MVT)
@@ -718,15 +721,43 @@ export const getFieldsFromTile = async ({
       const lon = (metadata.bounds[0] + metadata.bounds[2]) / 2;
       const lat = (metadata.bounds[1] + metadata.bounds[3]) / 2;
       const tileIndices = lonLatToTileIndex(lon, lat, metadata.minZoom);
-
       const tileSource =
         remoteTileFormat === RemoteTileFormat.MVT
           ? MVTSource.createDataSource(decodeURIComponent(tilesetUrl), {
+             loadOptions : {
+              fetch: (kkkk) => {
+                  console.log('**/why is this ',kkkk)
+                  return []
+                }
+            },
               mvt: {
                 metadataUrl: decodeURIComponent(metadataUrl)
               }
             })
-          : PMTilesSource.createDataSource(tilesetUrl, {});
+          : PMTilesSource.createDataSource(tilesetUrl, {
+            loadOptions : {
+             fetch: async (input: RequestInfo | URL, init?: RequestInit) => {
+              console.log('**/fetch PMTiles with auth', input);
+             const authToken = 'helloworld';// this.getAuthToken();
+              const authInit: RequestInit = {
+                ...init,
+                headers: {
+                  ...init?.headers,
+                  // Add authorization token if available
+                 ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {})
+                }
+              };
+              return fetch(input, authInit);
+            }
+            }
+          //   pmtiles: {
+          //   loadOptions: {
+          //       fetch: (kkkk) => {
+          //         console.log('**/why is this ',kkkk)
+          //       }
+          //   }
+          // }
+          });
       const tile = await tileSource.getTileData({index: tileIndices} as any);
       const updatedFields = tileToFields(tile).map(f => {
         return {
